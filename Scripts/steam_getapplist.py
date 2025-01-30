@@ -3,11 +3,13 @@ import os
 import sys
 import requests
 import json
+from database_handler import upload_to_s3
 
 # Load environment variables for api key
 load_dotenv()
 
 api_key = os.getenv('steam_api_key')
+
 
 # function to get steam data
 def fetch_steam_game_data():
@@ -26,6 +28,7 @@ def fetch_steam_game_data():
         print(f'The following error occured when collecting the App List: {e}')
         return None
 
+
 def estimate_json_size(data):
     """Estimates the size of JSON data in memory (before saving)."""
     json_str = json.dumps(data)  # Convert to JSON string
@@ -37,8 +40,8 @@ def estimate_json_size(data):
 
 if __name__ == "__main__":
     app_list = fetch_steam_game_data()
+    upload_to_s3(app_list,file_name = "steam_app_list.json")
 
-    
 
     # if app_list:
     #     size_bytes, size_kb, size_mb = estimate_json_size(app_list)
