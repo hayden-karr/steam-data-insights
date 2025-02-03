@@ -13,7 +13,7 @@ bucket_name = os.getenv('AWS_BUCKET_NAME')
 
 
 #initialize s3 aws storage
-s3 = boto3.client('s3', aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
+s3 = boto3.client('s3', aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key, region_name = 'us-east-2')
 
 # Function to check if file exists on S3
 def s3_file_exists(bucket, key):
@@ -53,4 +53,10 @@ def download_existing_s3_data(file_name):
         print(f"Error downloading existing S3 data: {e}")
         return []
     
-    
+# Function to upload FILE to S3
+def upload_file_to_s3(file_name):
+        try:
+            s3.upload_file(file_name, Bucket = bucket_name, onject_name = file_name)
+            print(f'Uploaded {file_name} successfully')
+        except Exception as e:
+            print(f'The following error has occured: {e}')
