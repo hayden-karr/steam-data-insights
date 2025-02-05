@@ -69,7 +69,7 @@ if __name__ == "__main__":
     #upload_to_s3(app_list,file_name = "steam_app_list.json")
 
 
-    with open("steam_games.json", "w") as json_file:
+    with open("output_data/steam_games.json", "w") as json_file:
         json.dump(app_list, json_file, indent=4) 
     
     # if app_list:

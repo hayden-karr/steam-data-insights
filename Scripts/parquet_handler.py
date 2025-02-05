@@ -4,8 +4,15 @@ import os
 
 # Function to read existing parquet file
 def read_parquet(parquet_file_name):
-    if os.path.exists(parquet_file_name):
-        return pl.read_parquet(parquet_file_name)
+
+    # Ensure output directory exists
+    os.makedirs("output_data", exist_ok=True)
+    
+    # Full path for output file
+    file_path = os.path.join("output_data", parquet_file_name)
+    
+    if os.path.exists(file_path):
+        return pl.read_parquet(file_path)
     else:
         return pl.DataFrame([])
     
@@ -13,6 +20,12 @@ def read_parquet(parquet_file_name):
 # Function to save parquet file in chunks
 def save_to_parquet(df, parquet_file_name, chunk_size=100):
     """Save the DataFrame to Parquet in chunks to avoid memory overload."""
+
+    # Ensure output directory exists
+    os.makedirs("output_data", exist_ok=True)
+    
+    # Full path for output file
+    file_path = os.path.join("output_data", parquet_file_name)
 
     kwargs = dict(
     use_pyarrow=True,
@@ -31,9 +44,10 @@ def save_to_parquet(df, parquet_file_name, chunk_size=100):
         chunk_df = df[start_row:end_row]  # Get the current chunk
         
         if i== 0:
-            chunk_df.write_parquet(parquet_file_name)
+            chunk_df.write_parquet(file_path)
         else:
-            chunk_df.write_parquet(parquet_file_name, **kwargs)
+            chunk_df.write_parquet(file_path, use_pyarrow=True, mode="append")
+            #chunk_df.write_parquet(file_path, **kwargs)
 
 # Function to check for duplicates and update if necessary
 def update_parquet_with_new_data(new_data, existing_data, parquet_file_name, chunk_size=100):
@@ -44,10 +58,13 @@ def update_parquet_with_new_data(new_data, existing_data, parquet_file_name, chu
     # Create an empty list to store updated chunks
     updated_chunks = []
 
+    # Track processed appids to avoid duplication
+    processed_appids = set()
+
     # Process data in chunks
     for existing_chunk in existing_df.iter_slices(n_rows=chunk_size):
         # Join chunk with new data
-        merged_df = existing_chunk.join(new_df, on="appid", how="outer", suffix="_new")
+        merged_df = existing_chunk.join(new_df, on="appid", how="left", suffix="_new")
 
         # Use `coalesce` to replace only changed values
         updated_chunk = merged_df.with_columns([
@@ -59,11 +76,25 @@ def update_parquet_with_new_data(new_data, existing_data, parquet_file_name, chu
             pl.coalesce("publishers_new", "publishers").alias("publishers"),
         ]).select(["appid", "name", "release_date", "price", "genres", "developers", "publishers"])
 
+        # Track appids that have been processed
+        processed_appids.update(updated_chunk["appid"].to_list())
+
         # Store the processed chunk
         updated_chunks.append(updated_chunk)
 
-    # Combine all processed chunks
-    final_df = pl.concat(updated_chunks)
+    # Identify new entries that were not in existing data
+    new_entries = new_df.filter(~pl.col("appid").is_in(list(processed_appids)))
+
+
+
+    # Append new entries to the final dataset
+    # Process new entries in chunks
+    new_entry_chunks = []
+    for new_chunk in new_entries.iter_slices(n_rows=chunk_size):
+        new_entry_chunks.append(new_chunk)
+
+    # Combine existing updates and new entries chunks
+    final_df = pl.concat(updated_chunks + new_entry_chunks)
 
     # Save the updated data
     # save_to_parquet(final_df, parquet_file_name, chunk_size)
