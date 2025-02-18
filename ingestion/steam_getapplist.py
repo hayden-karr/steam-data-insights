@@ -66,12 +66,6 @@ def estimate_json_size(data):
 if __name__ == "__main__":
     app_list = fetch_steam_game_data()
 
-    #upload_to_s3(app_list,file_name = "steam_app_list.json")
-
-
     with open("output_data/steam_games.json", "w") as json_file:
         json.dump(app_list, json_file, indent=4) 
     
-    # if app_list:
-    #     size_bytes, size_kb, size_mb = estimate_json_size(app_list)
-    #     print(f'{size_mb: .4f} MB')
