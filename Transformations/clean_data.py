@@ -1,16 +1,6 @@
 from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.types import IntegerType, DoubleType
 import logging
-import os
-from pyspark import SparkContext
-
-sc = SparkContext.getOrCreate()
-
-# Ensure Spark finds the currency conversion file
-currency_conversion_path = os.path.join("Transformations","currency_convert.py")
-sc.addPyFile(currency_conversion_path)
-
-# Now import the module AFTER ensuring it's added
 import currency_convert
 
 
