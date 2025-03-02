@@ -4,6 +4,9 @@ import time
 import requests
 import polars as pl
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 from parquet_handler import save_or_update_parquet
 from api_track_cache import load_cache, load_api_usage, check_api_limit, save_api_usage, save_cache, reset_api_usage_if_new_day, reset_processed_appids_if_complete
 
@@ -22,6 +25,24 @@ processed_appids_file = os.path.join('APIandCache', 'processed_appids.json')
 batch_size = 100
 max_file_size_bytes = 1000  # Example limit, modify as needed
 daily_api_limit = 100000
+
+# Set up a retry strategy for HTTP requests using urllib3's Retry class
+def get_retry_session():
+    """Create a requests session with retry logic."""
+    session = requests.Session()
+    retry = Retry(
+        total=5,  # Retry 5 times before failing
+        backoff_factor=1,  # Exponential backoff
+        status_forcelist=[500, 502, 503, 504],  # Retry on specific HTTP status codes
+        method_whitelist=["GET"]  # Retry only for GET requests
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+# Use the session to make HTTP requests with retries
+session = get_retry_session()
 
 def load_processed_appids():
     """Load the list of processed App IDs from a JSON file."""
@@ -52,24 +73,21 @@ def fetch_game_details(app_ids, retries=5):
 
         url = f"https://store.steampowered.com/api/appdetails?appids={app_id}"
 
-        for attempt in range(retries):
-            try:
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                data = response.json()
-                
-                if data and str(app_id) in data and data[str(app_id)]["success"]:
-                    game_data[app_id] = data[str(app_id)]["data"]
-                    cache[str(app_id)] = data[str(app_id)]["data"]
-                    api_usage["calls"] += 1
-                    break
-                else:
-                    print(f"App ID {app_id} returned no data.")
-                    break
-            except requests.exceptions.RequestException as e:
-                wait_time = 2 ** attempt + 1
-                print(f"Error fetching App ID {app_id}: {e}. Retrying in {wait_time} seconds...")
-                time.sleep(wait_time)
+        
+        try:
+            response = session.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data and str(app_id) in data and data[str(app_id)]["success"]:
+                game_data[app_id] = data[str(app_id)]["data"]
+                cache[str(app_id)] = data[str(app_id)]["data"]
+                api_usage["calls"] += 1
+            else:
+                print(f"App ID {app_id} returned no data.")
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching App ID {app_id}: {e}")
+            
         time.sleep(1)
     
     save_cache(cache)
